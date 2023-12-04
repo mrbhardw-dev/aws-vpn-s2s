@@ -46,7 +46,12 @@ variable "ami" {
 
 variable "instance_type" {
   type    = string
-  default = "c5.metal"
+  default = "t3.xlarge"
 
 }
 
+# variable "primary_tunnel_ip" {
+#   description = "Default timezone for EC2 instances"
+#   type = string
+#   default     = module.vpn_gateway.primary_tunnel_ip
+# }

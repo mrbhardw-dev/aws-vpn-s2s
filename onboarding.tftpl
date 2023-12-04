@@ -1,0 +1,156 @@
+#!/bin/bash
+
+# Update package list and install necessary dependencies
+sudo apt update && sudo apt upgrade
+sudo apt install -y strongswan frr net-tools
+
+# Configure StrongSwan
+
+# Backup the existing configuration
+sudo mv /etc/ipsec.conf /etc/ipsec.conf.bak
+sudo mv /etc/ipsec.secrets /etc/ipsec.secrets.bak
+sudo tee /etc/ipsec-vti.sh
+
+# Create a new ipsec.conf file
+sudo tee /etc/ipsec.conf > /dev/null <<EOF
+# ipsec.conf - strongSwan IPsec configuration file
+
+# basic configuration
+
+config setup
+	# strictcrlpolicy=yes
+	# uniqueids = no
+
+# Add connections here.
+
+# Sample VPN connections
+
+#conn sample-self-signed
+#      leftsubnet=10.1.0.0/16
+#      leftcert=selfCert.der
+#      leftsendcert=never
+#      right=192.168.0.2
+#      rightsubnet=10.2.0.0/16
+#      rightcert=peerCert.der
+#      auto=start
+
+#conn sample-with-ca-cert
+#      leftsubnet=10.1.0.0/16
+#      leftcert=myCert.pem
+#      right=192.168.0.2
+#      rightsubnet=10.2.0.0/16
+#      rightid="C=CH, O=Linux strongSwan CN=peer name"
+#      auto=start
+conn %default
+  leftauth=psk
+  rightauth=psk
+  ike=aes256-sha2_256-modp2048!
+  ikelifetime=28800s
+  aggressive=no
+  esp=aes256-sha2_256!
+  lifetime=3600s
+  type=tunnel
+  dpddelay=10s
+  dpdtimeout=30s
+  keyexchange=ikev2
+  rekey=yes
+  reauth=no
+  dpdaction=restart
+  closeaction=restart
+  left=%defaultroute
+  leftsubnet=0.0.0.0/0,::/0
+  rightsubnet=0.0.0.0/0,::/0
+  leftupdown=/etc/ipsec-vti.sh
+  installpolicy=yes
+  compress=no
+  mobike=no
+
+conn AWS-TGW-TUNNEL-1
+  left=%any
+  right=${primary_tunnel_ip}
+  auto=start
+  mark=100
+
+conn AWS-TGW-TUNNEL-2
+  left=%any
+  right=${secondary_tunnel_ip}
+  auto=start
+  mark=200
+
+# conn AWS-CP-TUNNEL-1
+#   left=%any
+#   right=18.198.173.20
+#   leftsubnet=100.64.0.229/32
+#   rightsubnet=195.144.19.6/32, 172.16.80.23/32
+#   auto=start
+#   mark=300
+EOF
+
+# Create a new ipsec.secrets file
+sudo tee /etc/ipsec.secrets > /dev/null <<EOF
+${primary_tunnel_ip} : PSK "1234567890abcdefghijklmn"
+${secondary_tunnel_ip} : PSK "1234567890abcdefghijklmn"
+EOF
+
+# Restart StrongSwan
+sudo systemctl restart strongswan
+
+# Configure FRR
+
+# Backup the existing configuration
+sudo mv /etc/frr/daemons /etc/frr/daemons.bak
+sudo mv /etc/frr/frr.conf /etc/frr/frr.conf.bak
+
+# Create a new daemons file for FRR
+sudo tee /etc/frr/daemons > /dev/null <<EOF
+zebra=yes
+bgpd=yes
+ospfd=yes
+ospf6d=yes
+ripd=no
+ripngd=no
+isisd=no
+pimd=no
+ldpd=no
+nhrpd=no
+eigrpd=no
+babeld=no
+sharpd=no
+EOF
+
+# Create a new FRR configuration file
+sudo tee /etc/frr/frr.conf > /dev/null <<EOF
+!
+frr version 7.5
+frr defaults traditional
+hostname frtr.mrbhardw.awsps.myinstance.com
+log syslog informational
+no ipv6 forwarding
+service integrated-vtysh-config
+!
+router bgp ${local_as}
+ bgp router-id ${router_id}
+ neighbor ${primary_bgp_neighbour} remote-as ${remote_as}
+ neighbor ${secondary_bgp_neighbour} remote-as ${remote_as}
+ !
+ address-family ipv4 unicast
+  network ${bgp_advertised_network}
+  neighbor ${primary_bgp_neighbour} route-map RM_HIGHER_PRIORITY in
+  neighbor ${secondary_bgp_neighbour}  route-map RM_LOWER_PRIORITY out
+ exit-address-family
+!
+route-map RM_HIGHER_PRIORITY permit 10
+ set local-preference 200
+!
+route-map RM_LOWER_PRIORITY permit 10
+ set as-path prepend 65001 65001 65001
+!
+line vty
+!
+EOF
+
+# Restart FRR
+sudo systemctl restart frr
+
+echo "Installation and configuration completed successfully!"
+
