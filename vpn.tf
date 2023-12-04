@@ -1,6 +1,6 @@
 resource "aws_customer_gateway" "main" {
   bgp_asn    = 64520
-  ip_address = aws_eip.eip.public_ip
+  ip_address = aws_eip.vpn_gw_eip.public_ip
   type       = "ipsec.1"
 
   tags = {

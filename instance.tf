@@ -62,10 +62,10 @@ module "ec2_instance_vpn_gw_frr" {
 
 resource "aws_eip_association" "eip_assoc" {
   instance_id   = module.ec2_instance_vpn_gw_frr.id
-  allocation_id = aws_eip.eip.allocation_id
+  allocation_id = aws_eip.vpn_gw_eip.allocation_id
 }
 
-resource "aws_eip" "eip" {
+resource "aws_eip" "vpn_gw_eip" {
   domain = "vpc"
   tags = {
     Name = "euw1-${module.label.id}-s2s-frr01"

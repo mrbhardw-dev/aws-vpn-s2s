@@ -15,7 +15,7 @@ data "aws_ami" "latest_ubuntu" {
 }
 
 # data "template_file" "cloud_init" {
-#   template = file("${path.module}/onboarding.tftpl")
+#   template = file("${path.module}/ONBOARD_EC2.tftpl")
 #   vars = {
 #     TimeZone             = var.timezone
 #     AuthorizedUserName   = "ubuntu"
